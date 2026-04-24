@@ -19,41 +19,56 @@ const BLOB_KEY = 'current-queue';
 
 // Helper to get playlist from either Blobs or Local File
 export async function getPlaylist(): Promise<SongRequest[]> {
+  const isNetlify = process.env.NETLIFY === 'true' || !!process.env.NETLIFY_PURPOSE || !!process.env.SITE_ID;
+
   // If in Netlify environment with Blobs available
-  if (process.env.NETLIFY || process.env.NETLIFY_PURPOSE === 'build') {
+  if (isNetlify) {
     try {
+      console.log('Attempting to read from Netlify Blobs...');
       const store = getStore(STORE_NAME);
+      if (!store) throw new Error('Could not initialize Blob store');
+
       const data = await store.get(BLOB_KEY, { type: 'json' });
       return (data as SongRequest[]) || [];
     } catch (e) {
-      console.error('Blob read error, falling back to empty:', e);
-      return [];
+      console.error('Blob read error:', e);
+      // Fallback to local only if we're somehow running in a way that allows it
     }
   }
 
-  // Local fallback
-  if (!fs.existsSync(FILE_PATH)) return [];
+  // Local fallback (development)
   try {
+    if (!fs.existsSync(FILE_PATH)) return [];
     const data = fs.readFileSync(FILE_PATH, 'utf8');
     return JSON.parse(data);
-  } catch {
+  } catch (e) {
+    console.error('Local read error:', e);
     return [];
   }
 }
 
 export async function savePlaylist(playlist: SongRequest[]) {
-  if (process.env.NETLIFY || process.env.NETLIFY_PURPOSE === 'build') {
+  const isNetlify = process.env.NETLIFY === 'true' || !!process.env.NETLIFY_PURPOSE || !!process.env.SITE_ID;
+
+  if (isNetlify) {
     try {
+      console.log('Attempting to save to Netlify Blobs...');
       const store = getStore(STORE_NAME);
-      await store.setJSON(BLOB_KEY, playlist);
-      return;
+      if (store) {
+        await store.setJSON(BLOB_KEY, playlist);
+        return;
+      }
     } catch (e) {
       console.error('Blob write error:', e);
     }
   }
 
-  // Local fallback
-  fs.writeFileSync(FILE_PATH, JSON.stringify(playlist, null, 2));
+  // Local fallback (development)
+  try {
+    fs.writeFileSync(FILE_PATH, JSON.stringify(playlist, null, 2));
+  } catch (e) {
+    console.error('Local write error:', e);
+  }
 }
 
 export async function addSong(song: Omit<SongRequest, 'id' | 'timestamp'>) {
