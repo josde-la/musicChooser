@@ -3,13 +3,8 @@ import { getPlaylist, addSong } from '@/lib/playlist';
 import { searchSong } from '@/lib/youtube';
 
 export async function GET() {
-  try {
-    const playlist = await getPlaylist();
-    return NextResponse.json(playlist);
-  } catch (error: any) {
-    console.error('GET requests error:', error);
-    return NextResponse.json({ error: error.message || 'Error fetching playlist' }, { status: 500 });
-  }
+  const playlist = await getPlaylist();
+  return NextResponse.json(playlist);
 }
 
 export async function POST(request: Request) {
@@ -18,7 +13,7 @@ export async function POST(request: Request) {
     const { title, artist, requestedBy } = body;
 
     if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Song title is required' }, { status: 400 });
     }
 
     const query = artist ? `${title} ${artist}` : title;
@@ -38,8 +33,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(newSong);
-  } catch (error: any) {
-    console.error('POST requests error:', error);
-    return NextResponse.json({ error: error.message || 'Error processing request' }, { status: 500 });
+  } catch (error) {
+    console.error('Request processing error:', error);
+    return NextResponse.json({ error: 'Error processing your request' }, { status: 500 });
   }
 }

@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
+import { searchSong } from '@/lib/youtube';
 import yts from 'yt-search';
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = searchParams.get('q');
+
+  if (!q) {
+    return NextResponse.json([]);
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const q = searchParams.get('q');
-
-    if (!q) {
-      return NextResponse.json([]);
-    }
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Search timeout')), 8000)
-    );
-
     const searchFn = (yts as any).default || yts;
-    const searchPromise = searchFn(q);
-
-    const r: any = await Promise.race([searchPromise, timeoutPromise]);
+    const r = await searchFn(q);
 
     if (!r || !r.videos) return NextResponse.json([]);
 
@@ -29,8 +24,8 @@ export async function GET(request: Request) {
       duration: video.timestamp,
     }));
     return NextResponse.json(videos);
-  } catch (error: any) {
-    console.error('Search error:', error);
-    return NextResponse.json({ error: error.message || 'Error searching YouTube' }, { status: 500 });
+  } catch (error) {
+    console.error('Search API error:', error);
+    return NextResponse.json([]);
   }
 }

@@ -1,40 +1,47 @@
 import yts from 'yt-search';
 
+/**
+ * Searches for a song on YouTube.
+ * If only a song title is provided, it returns the best match.
+ */
 export async function searchSong(query: string) {
   try {
-    // Some environments (like Netlify) might have quirks with ESM/CJS interop
+    // Check if we have an API key (optional but recommended for 100% reliability)
+    const apiKey = process.env.YOUTUBE_API_KEY;
+
+    if (apiKey) {
+      const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&key=${apiKey}`;
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (data.items && data.items.length > 0) {
+        const item = data.items[0];
+        return {
+          title: item.snippet.title,
+          artist: item.snippet.channelTitle,
+          youtubeUrl: `https://youtube.com/watch?v=${item.id.videoId}`,
+          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
+          duration: '3:00', // API search doesn't give duration in the same call
+        };
+      }
+    }
+
+    // Fallback to yt-search (scraping)
     const searchFn = (yts as any).default || yts;
+    const r = await searchFn(query);
 
-    if (typeof searchFn !== 'function') {
-      console.error('yt-search is not a function after import');
-      return null;
-    }
+    if (!r || !r.videos || r.videos.length === 0) return null;
 
-    // Add a timeout to prevent hanging on serverless environments
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Search timeout')), 8000)
-    );
-
-    const searchPromise = searchFn(query);
-
-    const r: any = await Promise.race([searchPromise, timeoutPromise]);
-
-    if (!r || !r.videos) return null;
-
-    const videos = r.videos.slice(0, 1);
-    if (videos.length > 0) {
-      const video = videos[0];
-      return {
-        title: video.title,
-        artist: video.author.name,
-        youtubeUrl: video.url,
-        thumbnail: video.thumbnail,
-        duration: video.timestamp,
-      };
-    }
+    const video = r.videos[0];
+    return {
+      title: video.title,
+      artist: video.author.name,
+      youtubeUrl: video.url,
+      thumbnail: video.thumbnail,
+      duration: video.timestamp,
+    };
   } catch (error) {
     console.error('YouTube search error:', error);
     return null;
   }
-  return null;
 }
