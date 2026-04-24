@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 export interface SongRequest {
   id: string;
   title: string;
@@ -12,9 +9,30 @@ export interface SongRequest {
   duration?: string;
 }
 
-const FILE_PATH = path.join(process.cwd(), 'playlist.json');
 const STORE_NAME = 'party-playlist';
 const BLOB_KEY = 'current-queue';
+
+async function getFs() {
+  try {
+    return await import('fs');
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getPath() {
+  try {
+    return await import('path');
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getFilePath() {
+  const path = await getPath();
+  if (!path) return 'playlist.json';
+  return path.join(process.cwd(), 'playlist.json');
+}
 
 // Helper to get playlist from either Blobs or Local File
 export async function getPlaylist(): Promise<SongRequest[]> {
@@ -38,8 +56,10 @@ export async function getPlaylist(): Promise<SongRequest[]> {
 
   // Local fallback (development)
   try {
-    if (!fs.existsSync(FILE_PATH)) return [];
-    const data = fs.readFileSync(FILE_PATH, 'utf8');
+    const fs = await getFs();
+    const filePath = await getFilePath();
+    if (!fs || !fs.existsSync(filePath)) return [];
+    const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (e) {
     console.error('Local read error:', e);
@@ -66,7 +86,11 @@ export async function savePlaylist(playlist: SongRequest[]) {
 
   // Local fallback (development)
   try {
-    fs.writeFileSync(FILE_PATH, JSON.stringify(playlist, null, 2));
+    const fs = await getFs();
+    const filePath = await getFilePath();
+    if (fs) {
+      fs.writeFileSync(filePath, JSON.stringify(playlist, null, 2));
+    }
   } catch (e) {
     console.error('Local write error:', e);
   }

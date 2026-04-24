@@ -2,19 +2,20 @@ import { NextResponse } from 'next/server';
 import yts from 'yt-search';
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const q = searchParams.get('q');
-
-  if (!q) {
-    return NextResponse.json([]);
-  }
-
   try {
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get('q');
+
+    if (!q) {
+      return NextResponse.json([]);
+    }
+
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Search timeout')), 8000)
     );
 
-    const searchPromise = yts(q);
+    const searchFn = (yts as any).default || yts;
+    const searchPromise = searchFn(q);
 
     const r: any = await Promise.race([searchPromise, timeoutPromise]);
 
@@ -28,8 +29,8 @@ export async function GET(request: Request) {
       duration: video.timestamp,
     }));
     return NextResponse.json(videos);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Search error:', error);
-    return NextResponse.json({ error: 'Error searching YouTube (possible timeout)' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Error searching YouTube' }, { status: 500 });
   }
 }
