@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { removeSong } from '@/lib/playlist';
 
 export async function DELETE(
-  request: Request,
   { params }: { params: { id: string } }
 ) {
   const { id } = params;
