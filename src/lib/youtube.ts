@@ -2,12 +2,20 @@ import yts from 'yt-search';
 
 export async function searchSong(query: string) {
   try {
+    // Some environments (like Netlify) might have quirks with ESM/CJS interop
+    const searchFn = (yts as any).default || yts;
+
+    if (typeof searchFn !== 'function') {
+      console.error('yt-search is not a function after import');
+      return null;
+    }
+
     // Add a timeout to prevent hanging on serverless environments
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Search timeout')), 8000)
     );
 
-    const searchPromise = yts(query);
+    const searchPromise = searchFn(query);
 
     const r: any = await Promise.race([searchPromise, timeoutPromise]);
 

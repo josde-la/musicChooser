@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { getStore } from '@netlify/blobs';
 
 export interface SongRequest {
   id: string;
@@ -25,6 +24,7 @@ export async function getPlaylist(): Promise<SongRequest[]> {
   if (isNetlify) {
     try {
       console.log('Attempting to read from Netlify Blobs...');
+      const { getStore } = await import('@netlify/blobs');
       const store = getStore(STORE_NAME);
       if (!store) throw new Error('Could not initialize Blob store');
 
@@ -53,6 +53,7 @@ export async function savePlaylist(playlist: SongRequest[]) {
   if (isNetlify) {
     try {
       console.log('Attempting to save to Netlify Blobs...');
+      const { getStore } = await import('@netlify/blobs');
       const store = getStore(STORE_NAME);
       if (store) {
         await store.setJSON(BLOB_KEY, playlist);
