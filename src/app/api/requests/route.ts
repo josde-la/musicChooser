@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se encontró la canción en YouTube' }, { status: 404 });
     }
 
-    const newSong = addSong({
+    const newSong = await addSong({
       title: youtubeData.title,
       artist: youtubeData.artist,
       requestedBy: requestedBy || 'Guest',
