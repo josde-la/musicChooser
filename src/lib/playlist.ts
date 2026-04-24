@@ -23,7 +23,7 @@ export async function getPlaylist(): Promise<SongRequest[]> {
   if (process.env.NETLIFY || process.env.NETLIFY_PURPOSE === 'build') {
     try {
       const store = getStore(STORE_NAME);
-      const data = await store.getJSON(BLOB_KEY);
+      const data = await store.get(BLOB_KEY, { type: 'json' });
       return (data as SongRequest[]) || [];
     } catch (e) {
       console.error('Blob read error, falling back to empty:', e);
