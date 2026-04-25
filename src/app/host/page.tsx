@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, Reorder, AnimatePresence } from 'framer-motion';
-import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2 } from 'lucide-react';
+import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import YouTube from 'react-youtube';
 
@@ -41,6 +41,10 @@ export default function HostDashboard() {
   const [hasMounted, setHasMounted] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const playerRef = useRef<any>(null);
+  const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -50,10 +54,51 @@ export default function HostDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Track progress
+  useEffect(() => {
+    let timer: any;
+    if (isPlaying && playerRef.current) {
+      timer = setInterval(() => {
+        const currentTime = playerRef.current.getCurrentTime();
+        const totalTime = playerRef.current.getDuration();
+        setProgress(currentTime);
+        setDuration(totalTime);
+
+        // Auto-fade start (last 5 seconds)
+        if (totalTime > 0 && totalTime - currentTime < 5 && !isFading) {
+          handleSmoothSkip();
+        }
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isPlaying, isFading]);
+
   const fetchPlaylist = async () => {
     const res = await fetch('/api/requests');
     const data = await res.json();
     setPlaylist(data);
+  };
+
+  const handleSmoothSkip = async () => {
+    if (isFading) return;
+    setIsFading(true);
+
+    // Smooth volume fade out
+    if (playerRef.current) {
+      let vol = 100;
+      const fadeInterval = setInterval(() => {
+        vol -= 10;
+        if (playerRef.current) playerRef.current.setVolume(vol);
+        if (vol <= 0) {
+          clearInterval(fadeInterval);
+          handleSkip();
+          setIsFading(false);
+        }
+      }, 300);
+    } else {
+      handleSkip();
+      setIsFading(false);
+    }
   };
 
   const handleSkip = async () => {
@@ -68,6 +113,28 @@ export default function HostDashboard() {
 
   const onReorder = async (newOrder: SongRequest[]) => {
     setPlaylist(newOrder);
+    await fetch('/api/requests/reorder', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newOrder: newOrder.map(s => s.id) }),
+    });
+  };
+
+  const togglePlay = () => {
+    if (!playerRef.current) return;
+    if (isPlaying) {
+      playerRef.current.pauseVideo();
+    } else {
+      playerRef.current.playVideo();
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    if (playerRef.current) {
+      playerRef.current.seekTo(time, true);
+      setProgress(time);
+    }
   };
 
   const currentVideoId = useMemo(() => {
@@ -78,8 +145,8 @@ export default function HostDashboard() {
   }, [playlist]);
 
   const youtubeOpts = {
-    height: '180',
-    width: '320',
+    height: '0',
+    width: '0',
     playerVars: {
       autoplay: 1,
       controls: 0,
@@ -89,90 +156,152 @@ export default function HostDashboard() {
     },
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!hasMounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12 relative overflow-hidden">
+      {/* Dynamic Background */}
+      <div className={`absolute top-0 left-0 w-full h-full bg-primary/5 transition-opacity duration-1000 ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
+
+      <div className="max-w-4xl mx-auto relative z-10">
         <header className="flex items-center justify-between mb-12">
           <div>
             <h1 className="text-4xl font-black neon-text text-primary">DJ Dashboard</h1>
-            <p className="text-white/40">Gestionando la cola de reproducción</p>
+            <p className="text-white/40">Magic Auto-Mix Enabled ✨</p>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowQR(true)}
-            className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-primary/20 text-primary font-bold"
-          >
-            <QrCode className="w-5 h-5" />
-            Invitación
-          </motion.button>
+          <div className="flex gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowQR(true)}
+              className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-primary/20 text-primary font-bold"
+            >
+              <QrCode className="w-5 h-5" />
+              Invitación
+            </motion.button>
+          </div>
         </header>
 
         <section className="mb-12">
-          <div className="glass p-8 rounded-[2rem] neon-border-primary relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4">
-              {playlist.length > 0 && playlist[0].thumbnail ? (
-                <img src={playlist[0].thumbnail} alt="Thumbnail" className="w-24 h-24 object-cover rounded-xl opacity-40" />
-              ) : (
-                <Music className="w-12 h-12 text-primary opacity-20 animate-pulse" />
+          <div className="glass p-8 rounded-[2.5rem] border-primary/20 relative overflow-hidden shadow-2xl">
+             {/* Player Thumbnail Background */}
+             <div className="absolute inset-0 opacity-10 blur-3xl pointer-events-none">
+              {playlist.length > 0 && playlist[0].thumbnail && (
+                <img src={playlist[0].thumbnail} alt="bg" className="w-full h-full object-cover" />
               )}
             </div>
 
-            <div className="flex items-center justify-between mb-4 text-white/40 uppercase tracking-widest text-sm font-bold">
-              <h2>Reproduciendo ahora</h2>
-              <div className="flex items-center gap-3">
-                <Volume2 className="w-4 h-4 text-primary" />
-                <MusicVisualizer isPlaying={isPlaying} />
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-8 text-white/40 uppercase tracking-widest text-xs font-black">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full bg-primary ${isPlaying ? 'animate-ping' : ''}`} />
+                  <h2>Reproduciendo ahora</h2>
+                </div>
+                <div className="flex items-center gap-4">
+                  <MusicVisualizer isPlaying={isPlaying} />
+                </div>
               </div>
+
+              {playlist.length > 0 ? (
+                <div className="space-y-8">
+                  <div className="flex items-center gap-8">
+                    <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-2xl border border-white/10 shrink-0">
+                      {playlist[0].thumbnail ? (
+                        <img src={playlist[0].thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                          <Music className="w-12 h-12 text-primary opacity-20 animate-pulse" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-4xl font-black mb-2 truncate leading-tight">{playlist[0].title}</h3>
+                      <p className="text-2xl text-primary font-medium truncate mb-4 opacity-80">{playlist[0].artist}</p>
+                      <div className="flex items-center gap-2 text-sm text-white/30 italic">
+                        <BarChart3 className="w-4 h-4" />
+                        Pedido por: <span className="text-white/60 font-bold not-italic">{playlist[0].requestedBy}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar & Controls */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 group">
+                      <span className="text-xs font-mono text-white/40 w-10">{formatTime(progress)}</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max={duration || 100}
+                        value={progress}
+                        onChange={handleSeek}
+                        className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-all"
+                      />
+                      <span className="text-xs font-mono text-white/40 w-10">{formatTime(duration)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-6">
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={togglePlay}
+                        className="p-6 bg-white text-black rounded-full shadow-xl hover:bg-primary hover:text-white transition-colors"
+                      >
+                        {isPlaying ? <Pause className="w-8 h-8 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
+                      </motion.button>
+
+                      <motion.button
+                        whileHover={{ scale: 1.1, x: 5 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleSmoothSkip}
+                        disabled={isFading}
+                        className="p-4 bg-white/5 rounded-full border border-white/10 text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                      >
+                        <FastForward className="w-6 h-6 fill-white" />
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                  <Music className="w-20 h-20 mb-6 animate-bounce" />
+                  <p className="text-3xl font-black italic tracking-tighter">No hay temas en la cola...</p>
+                </div>
+              )}
             </div>
 
-            {playlist.length > 0 ? (
-              <div className="flex items-center justify-between gap-8">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-3xl font-bold mb-1 truncate">{playlist[0].title}</h3>
-                  <p className="text-xl text-primary/80 truncate">{playlist[0].artist}</p>
-                  <p className="text-xs text-white/30 mt-2 italic">Pedido por: {playlist[0].requestedBy}</p>
-                </div>
-
-                <div className="fixed left-[-1000px] top-0 opacity-0 pointer-events-none">
-                  {isStarted && currentVideoId && (
-                    <YouTube
-                      videoId={currentVideoId}
-                      opts={youtubeOpts}
-                      onEnd={handleSkip}
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                      onError={(e) => console.error("YT Error:", e)}
-                    />
-                  )}
-                </div>
-
-                <div className="flex flex-col items-center gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => {
-                      if (!isStarted) {
-                        setIsStarted(true);
-                      } else {
-                        handleSkip();
-                      }
-                    }}
-                    className="p-5 bg-primary/20 rounded-full border border-primary/40 text-primary hover:bg-primary/30 transition-colors shrink-0"
-                  >
-                    <SkipForward className="w-8 h-8 fill-primary" />
-                  </motion.button>
-                  <p className="text-[10px] text-primary/40 font-bold uppercase tracking-widest">Siguiente</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 opacity-20">
-                <Music className="w-16 h-16 mb-4 animate-bounce" />
-                <p className="text-2xl italic">No hay nada en la cola...</p>
-              </div>
-            )}
+            {/* Hidden Player */}
+            <div className="fixed left-[-1000px] top-0 opacity-0 pointer-events-none">
+              {isStarted && currentVideoId && (
+                <YouTube
+                  videoId={currentVideoId}
+                  opts={youtubeOpts}
+                  onReady={(e) => {
+                    playerRef.current = e.target;
+                    playerRef.current.setVolume(100);
+                  }}
+                  onEnd={handleSkip}
+                  onStateChange={(e) => {
+                    setIsPlaying(e.data === 1);
+                    if (e.data === 1) {
+                       setDuration(e.target.getDuration());
+                       // Reset volume if it was faded
+                       e.target.setVolume(100);
+                    }
+                  }}
+                  onError={(e) => {
+                    console.error("YT Error:", e);
+                    handleSkip();
+                  }}
+                />
+              )}
+            </div>
           </div>
         </section>
 
@@ -197,11 +326,13 @@ export default function HostDashboard() {
         )}
 
         <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Próximas canciones</h2>
-            <span className="bg-white/10 px-3 py-1 rounded-full text-xs font-mono text-white/50">
-              {Math.max(0, playlist.length - 1)} EN COLA
-            </span>
+          <div className="flex items-center justify-between mb-8 px-2">
+            <h2 className="text-2xl font-black">Próximas canciones</h2>
+            <div className="flex items-center gap-3">
+               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-black border border-primary/20">
+                {Math.max(0, playlist.length - 1)} EN COLA
+              </span>
+            </div>
           </div>
 
           <Reorder.Group axis="y" values={playlist.slice(1)} onReorder={(vals) => onReorder([playlist[0], ...vals])} className="space-y-4">
@@ -214,21 +345,21 @@ export default function HostDashboard() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
                   layout
-                  className="glass p-3 rounded-2xl flex items-center gap-4 hover:border-white/20 transition-all group"
+                  className="glass p-4 rounded-3xl flex items-center gap-4 hover:border-white/20 transition-all group"
                 >
-                  <div className="cursor-grab active:cursor-grabbing text-white/20 hover:text-white/40">
+                  <div className="cursor-grab active:cursor-grabbing text-white/10 group-hover:text-white/30 transition-colors">
                     <GripVertical className="w-6 h-6" />
                   </div>
                   {song.thumbnail && (
-                    <img src={song.thumbnail} alt="thumb" className="w-12 h-12 rounded-lg object-cover" />
+                    <img src={song.thumbnail} alt="thumb" className="w-16 h-16 rounded-2xl object-cover shadow-lg" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-base truncate">{song.title}</h4>
-                    <p className="text-white/50 text-xs truncate">{song.artist}</p>
+                    <h4 className="font-bold text-lg truncate group-hover:text-primary transition-colors">{song.title}</h4>
+                    <p className="text-white/40 text-sm truncate">{song.artist}</p>
                   </div>
                   <button
                     onClick={() => handleDelete(song.id)}
-                    className="p-2 text-white/20 hover:text-accent transition-colors lg:opacity-0 lg:group-hover:opacity-100"
+                    className="p-3 text-white/10 hover:text-red-500 hover:bg-red-500/10 rounded-2xl transition-all lg:opacity-0 lg:group-hover:opacity-100"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -245,33 +376,48 @@ export default function HostDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-6"
             onClick={() => setShowQR(false)}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="glass p-8 rounded-[3rem] max-w-sm w-full text-center relative border-primary/30"
+              className="glass p-10 rounded-[3rem] max-w-sm w-full text-center relative border-primary/30"
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => setShowQR(false)}
-                className="absolute top-6 right-6 text-white/40 hover:text-white"
+                className="absolute top-8 right-8 text-white/40 hover:text-white"
               >
                 <X className="w-6 h-6" />
               </button>
 
-              <h2 className="text-2xl font-bold mb-6">Comparte la Cola</h2>
-              <div className="bg-white p-4 rounded-3xl mb-6 inline-block">
-                <QRCodeSVG value={joinUrl} size={200} />
+              <h2 className="text-3xl font-black mb-8 leading-tight">Invita a la<br/>Cabina</h2>
+              <div className="bg-white p-6 rounded-[2.5rem] mb-8 inline-block shadow-[0_0_50px_rgba(139,92,246,0.3)]">
+                <QRCodeSVG value={joinUrl} size={220} />
               </div>
-              <p className="text-white/60 mb-2">Escanea el código QR para unirte a la fiesta</p>
-              <p className="text-primary font-mono text-xs break-all">{joinUrl}</p>
+              <p className="text-white/60 mb-4 font-medium px-4 text-sm">Escanea para pedir tu tema favorito</p>
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                 <p className="text-primary font-mono text-xs break-all">{joinUrl}</p>
+              </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <style jsx global>{`
+        input[type='range']::-webkit-slider-thumb {
+          appearance: none;
+          width: 16px;
+          height: 16px;
+          background: #8b5cf6;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 3px solid #fff;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+        }
+      `}</style>
     </div>
   );
 }

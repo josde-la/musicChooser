@@ -45,3 +45,34 @@ export async function searchSong(query: string) {
     return null;
   }
 }
+
+/**
+ * Gets recommended/similar videos based on a video ID.
+ */
+export async function getRecommendedVideos(videoId: string) {
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (apiKey) {
+      const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=3&relatedToVideoId=${videoId}&type=video&key=${apiKey}`;
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (data.items && data.items.length > 0) {
+        return data.items.map((item: any) => ({
+          title: item.snippet.title,
+          artist: item.snippet.channelTitle,
+          youtubeUrl: `https://youtube.com/watch?v=${item.id.videoId}`,
+          thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
+          duration: '3:00',
+        }));
+      }
+    }
+
+    // Scraper fallback doesn't easily support "related" but we can search for the video title
+    // to get similar results
+    return [];
+  } catch (error) {
+    console.error('Recommended videos error:', error);
+    return [];
+  }
+}

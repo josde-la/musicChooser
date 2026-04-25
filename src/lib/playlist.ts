@@ -63,10 +63,20 @@ export async function reorderPlaylist(startIndex: number, endIndex: number) {
   await savePlaylist(playlist);
 }
 
+export async function updatePlaylistOrder(orderedIds: string[]) {
+  const playlist = await getPlaylist();
+  const ordered = orderedIds
+    .map((id) => playlist.find((s) => s.id === id))
+    .filter((s): s is SongRequest => !!s);
+  await savePlaylist(ordered);
+}
+
 export async function skipFirst() {
   const playlist = await getPlaylist();
   if (playlist.length > 0) {
-    playlist.shift();
+    const skipped = playlist.shift();
     await savePlaylist(playlist);
+    return skipped;
   }
+  return null;
 }

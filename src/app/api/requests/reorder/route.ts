@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
-import { reorderPlaylist } from '@/lib/playlist';
+import { reorderPlaylist, updatePlaylistOrder } from '@/lib/playlist';
 
 export async function PUT(request: Request) {
   const body = await request.json();
-  const { startIndex, endIndex } = body;
+  const { startIndex, endIndex, newOrder } = body;
+
+  if (newOrder && Array.isArray(newOrder)) {
+    await updatePlaylistOrder(newOrder);
+    return NextResponse.json({ success: true });
+  }
 
   if (startIndex === undefined || endIndex === undefined) {
-    return NextResponse.json({ error: 'Indices are required' }, { status: 400 });
+    return NextResponse.json({ error: 'Indices or newOrder are required' }, { status: 400 });
   }
 
   await reorderPlaylist(startIndex, endIndex);
