@@ -49,7 +49,7 @@ export async function searchSong(query: string) {
 /**
  * Gets recommended/similar videos based on a video ID.
  */
-export async function getRecommendedVideos(videoId: string) {
+export async function getRecommendedVideos(videoId: string, songTitle?: string) {
   try {
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (apiKey) {
@@ -68,8 +68,23 @@ export async function getRecommendedVideos(videoId: string) {
       }
     }
 
-    // Scraper fallback doesn't easily support "related" but we can search for the video title
-    // to get similar results
+    // Scraper fallback: Search for the song title and pick the 2nd/3rd results
+    // as they are usually "related" or "similar"
+    if (songTitle) {
+      const searchFn = (yts as any).default || yts;
+      const r = await searchFn(songTitle);
+      if (r && r.videos && r.videos.length > 2) {
+        // Return 2nd and 3rd videos (skip the 1st as it's the current song)
+        return r.videos.slice(1, 4).map((v: any) => ({
+          title: v.title,
+          artist: v.author.name,
+          youtubeUrl: v.url,
+          thumbnail: v.thumbnail,
+          duration: v.timestamp
+        }));
+      }
+    }
+
     return [];
   } catch (error) {
     console.error('Recommended videos error:', error);

@@ -57,10 +57,23 @@ export default function GuestPage() {
         setIsLoadingLyrics(true);
         try {
           const current = playlist[0];
-          const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(current.artist)}/${encodeURIComponent(current.title)}`);
-          if (!res.ok) throw new Error();
+          // Use LRCLib for more reliable lyrics
+          const res = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(current.title)}&artist_name=${encodeURIComponent(current.artist)}`);
           const data = await res.json();
-          setLyrics(data.lyrics || "No se encontraron letras para este tema 🎵");
+
+          if (data && data.length > 0) {
+            // First result is usually the best match
+            setLyrics(data[0].plainLyrics || data[0].syncedLyrics || "No se encontraron letras claras para este tema... 🎵");
+          } else {
+            // Fallback to searching with just the title
+            const fallbackRes = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(current.title)}`);
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData && fallbackData.length > 0) {
+              setLyrics(fallbackData[0].plainLyrics || fallbackData[0].syncedLyrics || "No se encontraron letras...");
+            } else {
+              setLyrics("No se encontraron letras para este tema 🎵");
+            }
+          }
         } catch (e) {
           setLyrics("No se pudieron cargar las letras...");
         } finally {

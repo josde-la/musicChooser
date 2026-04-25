@@ -12,7 +12,7 @@ export async function POST() {
     const videoId = match ? match[1] : null;
 
     if (videoId) {
-      const recommendations = await getRecommendedVideos(videoId);
+      const recommendations = await getRecommendedVideos(videoId, skippedSong.title);
       if (recommendations && recommendations.length > 0) {
         // Add one recommendation automatically
         const rec = recommendations[0];
