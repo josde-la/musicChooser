@@ -14,8 +14,8 @@ export async function POST() {
     if (videoId) {
       const recommendations = await getRecommendedVideos(videoId, skippedSong.title);
       if (recommendations && recommendations.length > 0) {
-        // Add one recommendation automatically
-        const rec = recommendations[0];
+        // Pick a random recommendation from the top few to add variety
+        const rec = recommendations[Math.floor(Math.random() * Math.min(3, recommendations.length))];
         await addSong({
           title: rec.title,
           artist: rec.artist,

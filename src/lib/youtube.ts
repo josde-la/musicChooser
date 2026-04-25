@@ -68,14 +68,26 @@ export async function getRecommendedVideos(videoId: string, songTitle?: string) 
       }
     }
 
-    // Scraper fallback: Search for the song title and pick the 2nd/3rd results
-    // as they are usually "related" or "similar"
+    // Discovery fallback: Search for the artist's name + "radio" or "mix"
+    // to discover DIFFERENT but similar songs
     if (songTitle) {
       const searchFn = (yts as any).default || yts;
-      const r = await searchFn(songTitle);
-      if (r && r.videos && r.videos.length > 2) {
-        // Return 2nd and 3rd videos (skip the 1st as it's the current song)
-        return r.videos.slice(1, 4).map((v: any) => ({
+      // We search for the song name but append "mix" or "similar"
+      const r = await searchFn(`${songTitle} similar songs`);
+
+      if (r && r.videos && r.videos.length > 0) {
+        // Filter out videos that have the same title (case insensitive)
+        // to avoid "Lyrics" or "Karaoke" versions of the SAME song
+        const baseTitle = songTitle.toLowerCase().split('(')[0].trim();
+
+        const filtered = r.videos.filter((v: any) => {
+          const vTitle = v.title.toLowerCase();
+          return !vTitle.includes(baseTitle);
+        });
+
+        const pool = filtered.length > 0 ? filtered : r.videos.slice(3); // Fallback to later results if all filtered
+
+        return pool.slice(0, 3).map((v: any) => ({
           title: v.title,
           artist: v.author.name,
           youtubeUrl: v.url,
