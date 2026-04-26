@@ -130,7 +130,7 @@ export async function importPlaylist(url: string) {
       }
     }
 
-    // Spotify Playlist (Embed Scraper)
+    // Spotify Playlist (Scraper)
     if (url.includes('spotify.com/playlist')) {
       const playlistId = url.match(/playlist\/([a-zA-Z0-9]+)/)?.[1];
       if (!playlistId) throw new Error('Invalid Spotify playlist link');
@@ -142,42 +142,18 @@ export async function importPlaylist(url: string) {
       });
       const html = await res.text();
 
-      const match = html.match(/id="initial-state" type="text\/plain">([^<]+)<\/script>/);
+      // The data is in a script tag with id="__NEXT_DATA__"
+      const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
       if (match) {
-        const decoded = Buffer.from(match[1], 'base64').toString();
-        const data = JSON.parse(decoded);
+        const data = JSON.parse(match[1]);
+        const trackList = data.props.pageProps.state.data.entity.trackList;
 
-        let items: any[] = [];
-        try {
-          // Track down the playlist items in the state object
-          const entities = data.entities?.items || {};
-          const playlistData = entities[playlistId] || Object.values(entities)[0];
-
-          if (playlistData && playlistData.content?.items) {
-            items = playlistData.content.items;
-          } else {
-            // Brute-force look for any array that looks like tracks
-            const findTracks = (obj: any): any[] | null => {
-              if (Array.isArray(obj) && obj.length > 0 && obj[0].item?.name) return obj;
-              if (typeof obj !== 'object' || obj === null) return null;
-              for (const key in obj) {
-                const found = findTracks(obj[key]);
-                if (found) return found;
-              }
-              return null;
-            };
-            items = findTracks(data) || [];
-          }
-        } catch (e) {
-          console.error('Spotify extraction error:', e);
-        }
-
-        if (items.length > 0) {
-          return items.map((t: any) => ({
-            title: t.item?.name || t.name,
-            artist: (t.item?.artists || t.artists)?.[0]?.name || 'Unknown Artist',
+        if (trackList && trackList.length > 0) {
+          return trackList.map((t: any) => ({
+            title: t.title,
+            artist: t.subtitle, // Artist name is in subtitle in the embed data
             sourceType: 'playlist'
-          })).filter(t => !!t.title);
+          }));
         }
       }
     }
@@ -191,7 +167,6 @@ export async function importPlaylist(url: string) {
       });
       const html = await res.text();
 
-      // Look for the JSON-LD or script data
       const tracks: any[] = [];
       const regex = /"trackName":"([^"]+)","artistName":"([^"]+)"/g;
       let m;
