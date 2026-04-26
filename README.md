@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎵 PartyMixer: The Ultimate AI DJ Experience
 
-## Getting Started
+PartyMixer is a modern, premium web application designed for parties, events, and gatherings. It allows guests to easily request songs via a QR code, while providing the host with a professional-grade DJ dashboard featuring smart auto-mixing and discovery.
 
-First, run the development server:
+![License](https://img.shields.io/badge/license-MIT-purple.svg)
+![Next.js](https://img.shields.io/badge/Next.js-16+-black.svg)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-Ready-blue.svg)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## ✨ Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **🚀 Instant Guest Requests**: Guests can simply scan a QR code and type a song name. No artist name or app installation required.
+- **✨ DJ Auto-Mix (Discovery Mode)**: When the playlist ends, the AI automatically finds and adds similar music, ensuring the party never stops.
+- **🎙️ Live Lyrics**: Guests can view real-time lyrics for the currently playing song directly on their phones.
+- **🎛️ Host Dashboard**:
+  - Drag-and-drop reordering.
+  - Smooth 5-second professional volume fade transitions.
+  - Playback progress slider and full playback controls.
+- **🎨 Premium Aesthetics**: A dark, glassmorphic UI with vibrant neon accents and fluid animations.
+- **📦 Persistence Ready**: Optimized for deployment on services like Railway or Render with support for persistent local storage.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Clone the repository**:
+   ```bash
+   git clone <your-repo-url>
+   cd music
+   ```
 
-## Learn More
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Environment Variables**:
+   Create a `.env.local` or set these in your hosting dashboard:
+   - `YOUTUBE_API_KEY` (Optional): For 100% reliable YouTube search. If omitted, the app will use a robust scraper fallback.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. **Build for Production**:
+   ```bash
+   npm run build
+   npm start
+   ```
 
-## Deploy on Vercel
+## 🚀 Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This app is optimized for **Railway** or **Render**.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Persistence Tip:
+Since the app uses a local `playlist.json` for storage, ensure you mount a **Persistent Volume/Disk** at the root of the application (or specifically for `playlist.json`) in your hosting dashboard. This ensures your party queue is saved even if the server restarts.
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Developed with ❤️ for the perfect party experience.
