@@ -49,6 +49,30 @@ export default function HostDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const wakeLockRef = useRef<any>(null);
+
+  // Wake Lock Logic
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('Wake Lock active');
+      }
+    } catch (err) {
+      console.error('Wake Lock failed:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isPlaying) {
+      requestWakeLock();
+    } else {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      }
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     setHasMounted(true);
@@ -103,6 +127,24 @@ export default function HostDashboard() {
       console.error("Add error:", e);
     }
   };
+
+  // Update Media Session for background control
+  useEffect(() => {
+    if (playlist.length > 0 && 'mediaSession' in navigator) {
+      const current = playlist[0];
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: current.title,
+        artist: current.artist,
+        artwork: [
+          { src: current.thumbnail || '', sizes: '512x512', type: 'image/jpeg' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => togglePlay());
+      navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+      navigator.mediaSession.setActionHandler('nexttrack', () => handleSkip());
+    }
+  }, [playlist[0]?.id]);
 
   // Track progress
   useEffect(() => {
