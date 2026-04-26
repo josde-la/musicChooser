@@ -202,7 +202,7 @@ export default function GuestPage() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute top-full left-0 w-full mt-2 glass rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+                    className="absolute top-full left-0 w-full mt-2 bg-[#121212]/95 backdrop-blur-2xl rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
                   >
                     {isSearching ? (
                       <div className="p-8 flex flex-col items-center gap-3">

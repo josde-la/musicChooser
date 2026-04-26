@@ -223,7 +223,7 @@ export default function HostDashboard() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 w-full mt-2 glass rounded-2xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar"
+                  className="absolute top-full left-0 w-full mt-2 bg-[#121212]/95 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar"
                 >
                   {searchResults.map((song, i) => (
                     <button
