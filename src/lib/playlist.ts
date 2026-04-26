@@ -10,6 +10,7 @@ export interface SongRequest {
   youtubeUrl?: string;
   thumbnail?: string;
   duration?: string;
+  sourceType?: 'individual' | 'playlist';
 }
 
 const FILE_PATH = path.join(process.cwd(), 'playlist.json');
@@ -45,7 +46,19 @@ export async function addSong(song: Omit<SongRequest, 'id' | 'timestamp'>) {
     id: Math.random().toString(36).substring(2, 9),
     timestamp: Date.now(),
   };
-  playlist.push(newSong);
+
+  if (newSong.sourceType === 'playlist') {
+    playlist.push(newSong);
+  } else {
+    // Individual songs go after other individual songs but BEFORE playlist songs
+    const firstPlaylistIndex = playlist.findIndex(s => s.sourceType === 'playlist');
+    if (firstPlaylistIndex === -1) {
+      playlist.push(newSong);
+    } else {
+      playlist.splice(firstPlaylistIndex, 0, newSong);
+    }
+  }
+
   await savePlaylist(playlist);
   return newSong;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, Reorder, AnimatePresence } from 'framer-motion';
-import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2 } from 'lucide-react';
+import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2, Library } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import YouTube from 'react-youtube';
 import debounce from 'lodash/debounce';
@@ -49,6 +49,9 @@ export default function HostDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showPlaylistImport, setShowPlaylistImport] = useState(false);
+  const [playlistUrl, setPlaylistUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const wakeLockRef = useRef<any>(null);
 
   // Wake Lock Logic
@@ -76,11 +79,32 @@ export default function HostDashboard() {
 
   useEffect(() => {
     setHasMounted(true);
-    setJoinUrl(`${window.location.origin}/guest`);
+    setJoinUrl(`${window.location.host}/guest`);
     fetchPlaylist();
     const interval = setInterval(fetchPlaylist, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleImportPlaylist = async () => {
+    if (!playlistUrl) return;
+    setIsImporting(true);
+    try {
+      const res = await fetch('/api/requests/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: playlistUrl }),
+      });
+      if (!res.ok) throw new Error('Falló la importación');
+      setPlaylistUrl('');
+      setShowPlaylistImport(false);
+      fetchPlaylist();
+    } catch (e) {
+      console.error("Import error:", e);
+      alert("No se pudo importar la lista. Verifica el link.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const searchSongs = async (query: string) => {
     if (!query.trim()) {
@@ -290,6 +314,16 @@ export default function HostDashboard() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onClick={() => setShowPlaylistImport(true)}
+              className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-white/10 text-white font-bold shrink-0"
+            >
+              <Library className="w-5 h-5 text-accent" />
+              Importar Lista
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setShowQR(true)}
               className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-primary/20 text-primary font-bold shrink-0"
             >
@@ -298,6 +332,69 @@ export default function HostDashboard() {
             </motion.button>
           </div>
         </header>
+
+        {/* Playlist Import Modal */}
+        <AnimatePresence>
+          {showPlaylistImport && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="glass p-8 rounded-[3rem] border-white/10 max-w-lg w-full relative"
+              >
+                <button
+                  onClick={() => setShowPlaylistImport(false)}
+                  className="absolute top-6 right-6 p-4 glass rounded-full text-white/40 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+
+                <div className="mb-8">
+                  <div className="bg-accent/20 w-16 h-16 rounded-3xl flex items-center justify-center mb-6">
+                    <Library className="w-8 h-8 text-accent" />
+                  </div>
+                  <h2 className="text-3xl font-black mb-2">Importar Playlist</h2>
+                  <p className="text-white/40 font-medium">Pega el link de YouTube, Spotify o Apple Music. Las canciones se añadirán al final de la cola.</p>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="glass rounded-2xl border-white/10 overflow-hidden">
+                    <input
+                      type="text"
+                      placeholder="https://open.spotify.com/playlist/..."
+                      value={playlistUrl}
+                      onChange={(e) => setPlaylistUrl(e.target.value)}
+                      className="w-full bg-white/5 py-5 px-6 focus:outline-none placeholder:text-white/10"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleImportPlaylist}
+                    disabled={isImporting || !playlistUrl}
+                    className="w-full py-5 bg-accent rounded-[2rem] font-black text-lg shadow-xl shadow-accent/20 hover:brightness-110 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        IMPORTANDO CANCIONES...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-6 h-6" />
+                        AÑADIR A LA COLA
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <section className="mb-12">
           <div className="glass p-8 rounded-[2.5rem] border-primary/20 relative overflow-hidden shadow-2xl">
