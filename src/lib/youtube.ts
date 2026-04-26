@@ -130,14 +130,54 @@ export async function importPlaylist(url: string) {
       }
     }
 
-    // Spotify Playlist (Scraper Fallback or Info Parser)
+    // Spotify Playlist (Embed Scraper)
     if (url.includes('spotify.com/playlist')) {
       const playlistId = url.match(/playlist\/([a-zA-Z0-9]+)/)?.[1];
       if (!playlistId) throw new Error('Invalid Spotify playlist link');
 
-      // Since it's server-side, we can't easily use the Embed scraper without a headless browser
-      // But we can use an open-data resolver if available.
-      // For now, let's provide a notice or a basic title fetch if we can.
+      const res = await fetch(`https://open.spotify.com/embed/playlist/${playlistId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      const html = await res.text();
+
+      const match = html.match(/id="initial-state" type="text\/plain">([^<]+)<\/script>/);
+      if (match) {
+        const decoded = Buffer.from(match[1], 'base64').toString();
+        const data = JSON.parse(decoded);
+        const tracks = data.entities.items[playlistId].content.items;
+
+        return tracks.map((t: any) => ({
+          title: t.item.name,
+          artist: t.item.artists[0].name,
+          sourceType: 'playlist'
+        }));
+      }
+    }
+
+    // Apple Music Playlist (Page Scraper)
+    if (url.includes('music.apple.com')) {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      const html = await res.text();
+
+      // Look for the JSON-LD or script data
+      const tracks: any[] = [];
+      const regex = /"trackName":"([^"]+)","artistName":"([^"]+)"/g;
+      let m;
+      while ((m = regex.exec(html)) !== null) {
+        tracks.push({
+          title: m[1],
+          artist: m[2],
+          sourceType: 'playlist'
+        });
+      }
+
+      if (tracks.length > 0) return tracks;
     }
 
     return [];
