@@ -9,7 +9,7 @@ export async function POST(req: Request) {
 
     const tracks = await importPlaylist(url);
     if (!tracks || tracks.length === 0) {
-      return NextResponse.json({ error: 'No tracks found or platform not supported' }, { status: 404 });
+      return NextResponse.json({ error: 'No se encontraron temas en este link o la plataforma no es soportada.' }, { status: 422 });
     }
 
     // Add tracks to playlist

@@ -146,13 +146,39 @@ export async function importPlaylist(url: string) {
       if (match) {
         const decoded = Buffer.from(match[1], 'base64').toString();
         const data = JSON.parse(decoded);
-        const tracks = data.entities.items[playlistId].content.items;
 
-        return tracks.map((t: any) => ({
-          title: t.item.name,
-          artist: t.item.artists[0].name,
-          sourceType: 'playlist'
-        }));
+        let items: any[] = [];
+        try {
+          // Track down the playlist items in the state object
+          const entities = data.entities?.items || {};
+          const playlistData = entities[playlistId] || Object.values(entities)[0];
+
+          if (playlistData && playlistData.content?.items) {
+            items = playlistData.content.items;
+          } else {
+            // Brute-force look for any array that looks like tracks
+            const findTracks = (obj: any): any[] | null => {
+              if (Array.isArray(obj) && obj.length > 0 && obj[0].item?.name) return obj;
+              if (typeof obj !== 'object' || obj === null) return null;
+              for (const key in obj) {
+                const found = findTracks(obj[key]);
+                if (found) return found;
+              }
+              return null;
+            };
+            items = findTracks(data) || [];
+          }
+        } catch (e) {
+          console.error('Spotify extraction error:', e);
+        }
+
+        if (items.length > 0) {
+          return items.map((t: any) => ({
+            title: t.item?.name || t.name,
+            artist: (t.item?.artists || t.artists)?.[0]?.name || 'Unknown Artist',
+            sourceType: 'playlist'
+          })).filter(t => !!t.title);
+        }
       }
     }
 
