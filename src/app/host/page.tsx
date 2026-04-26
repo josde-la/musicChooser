@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, Reorder, AnimatePresence } from 'framer-motion';
-import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward } from 'lucide-react';
+import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import YouTube from 'react-youtube';
+import debounce from 'lodash/debounce';
 
 const MusicVisualizer = ({ isPlaying }: { isPlaying: boolean }) => (
   <div className="flex items-end gap-1 h-8">
@@ -45,6 +46,9 @@ export default function HostDashboard() {
   const [duration, setDuration] = useState(0);
   const playerRef = useRef<any>(null);
   const [isFading, setIsFading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     setHasMounted(true);
@@ -53,6 +57,52 @@ export default function HostDashboard() {
     const interval = setInterval(fetchPlaylist, 3000);
     return () => clearInterval(interval);
   }, []);
+
+  const searchSongs = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setSearchResults(data || []);
+    } catch (e) {
+      console.error("Search error:", e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const debouncedSearch = useRef(
+    debounce((query: string) => searchSongs(query), 500)
+  ).current;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    debouncedSearch(query);
+  };
+
+  const handleAddSong = async (song: any) => {
+    try {
+      await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: song.title,
+          artist: song.artist,
+          requestedBy: 'HOST'
+        }),
+      });
+      setSearchQuery('');
+      setSearchResults([]);
+      fetchPlaylist();
+    } catch (e) {
+      console.error("Add error:", e);
+    }
+  };
 
   // Track progress
   useEffect(() => {
@@ -63,11 +113,6 @@ export default function HostDashboard() {
         const totalTime = playerRef.current.getDuration();
         setProgress(currentTime);
         setDuration(totalTime);
-
-        // Auto-fade start (last 5 seconds)
-        if (totalTime > 0 && totalTime - currentTime < 5 && !isFading) {
-          handleSmoothSkip();
-        }
       }, 1000);
     }
     return () => clearInterval(timer);
@@ -77,28 +122,6 @@ export default function HostDashboard() {
     const res = await fetch('/api/requests');
     const data = await res.json();
     setPlaylist(data);
-  };
-
-  const handleSmoothSkip = async () => {
-    if (isFading) return;
-    setIsFading(true);
-
-    // Smooth volume fade out
-    if (playerRef.current) {
-      let vol = 100;
-      const fadeInterval = setInterval(() => {
-        vol -= 10;
-        if (playerRef.current) playerRef.current.setVolume(vol);
-        if (vol <= 0) {
-          clearInterval(fadeInterval);
-          handleSkip();
-          setIsFading(false);
-        }
-      }, 300);
-    } else {
-      handleSkip();
-      setIsFading(false);
-    }
   };
 
   const handleSkip = async () => {
@@ -170,17 +193,63 @@ export default function HostDashboard() {
       <div className={`absolute top-0 left-0 w-full h-full bg-primary/5 transition-opacity duration-1000 ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
 
       <div className="max-w-4xl mx-auto relative z-10">
-        <header className="flex items-center justify-between mb-12">
+        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
           <div>
             <h1 className="text-4xl font-black neon-text text-primary">DJ Dashboard</h1>
             <p className="text-white/40">Magic Auto-Mix Enabled ✨</p>
           </div>
+
+          <div className="flex-1 max-w-md relative group">
+            <div className="relative glass rounded-2xl border-white/10 overflow-hidden focus-within:border-primary/50 transition-all">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
+              <input
+                type="text"
+                placeholder="Añadir canción rápidamente..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full bg-white/5 py-4 pl-12 pr-12 focus:outline-none placeholder:text-white/20 font-medium"
+              />
+              {isSearching && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                </div>
+              )}
+            </div>
+
+            {/* Search Results Dropdown */}
+            <AnimatePresence>
+              {searchResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute top-full left-0 w-full mt-2 glass rounded-2xl border border-white/10 shadow-2xl z-50 overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar"
+                >
+                  {searchResults.map((song, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleAddSong(song)}
+                      className="w-full p-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-none"
+                    >
+                      <img src={song.thumbnail} alt="thumb" className="w-10 h-10 rounded-lg object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{song.title}</p>
+                        <p className="text-xs text-white/40 truncate">{song.artist}</p>
+                      </div>
+                      <Plus className="w-4 h-4 text-primary" />
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <div className="flex gap-4">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowQR(true)}
-              className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-primary/20 text-primary font-bold"
+              className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-primary/20 text-primary font-bold shrink-0"
             >
               <QrCode className="w-5 h-5" />
               Invitación
@@ -259,9 +328,8 @@ export default function HostDashboard() {
                       <motion.button
                         whileHover={{ scale: 1.1, x: 5 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={handleSmoothSkip}
-                        disabled={isFading}
-                        className="p-4 bg-white/5 rounded-full border border-white/10 text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                        onClick={handleSkip}
+                        className="p-4 bg-white/5 rounded-full border border-white/10 text-white hover:bg-white/10 transition-colors"
                       >
                         <FastForward className="w-6 h-6 fill-white" />
                       </motion.button>

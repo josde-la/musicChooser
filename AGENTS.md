@@ -27,16 +27,11 @@ Located in `src/lib/youtube.ts` (`getRecommendedVideos`) and triggered in `src/a
 - It **must** filter results to avoid duplicates (same song, different uploader).
 - It adds a random choice from the filtered results to keep the playlist fresh.
 
-### 2. Smooth Transitions
-Located in `src/app/host/page.tsx`.
-- The dashboard polls the current playback time.
-- 5 seconds before the end, it triggers `handleSmoothSkip`.
-- `handleSmoothSkip` performs a 300ms-stepped volume fade-out before calling the skip API.
-
-### 3. Lyrics Logic
-Located in `src/app/guest/page.tsx`.
-- Uses the **LRCLib** public API (`https://lrclib.net/api/search`).
-- Implements a fallback: if `Track + Artist` fails, it searches by `Track` only.
+### 2. Lyrics Logic
+Located in `src/app/guest/page.tsx` and `src/lib/lyrics.ts`.
+- Implements a **Redundant Multi-Provider** system.
+- Tries providers in order: **LRCLib** -> **Lyrics.ovh** -> **Lyrist**.
+- Includes a fuzzy search fallback (searching by title only) if specific Artist+Title matches fail.
 
 ## 📦 Persistence
 The app stores the queue in `/playlist.json`.

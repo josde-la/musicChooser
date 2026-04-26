@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Music, Search, Send, CheckCircle2, AlertCircle, Loader2, ListMusic, Mic2, X } from 'lucide-react';
 import debounce from 'lodash/debounce';
+import { fetchLyrics } from '@/lib/lyrics';
 
 interface SongPreview {
   title: string;
@@ -50,38 +51,21 @@ export default function GuestPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch lyrics for current song
+  // Fetch lyrics for current song with redundancy
   useEffect(() => {
-    const fetchLyrics = async () => {
+    const getLyrics = async () => {
       if (playlist.length > 0 && showLyrics) {
         setIsLoadingLyrics(true);
-        try {
-          const current = playlist[0];
-          // Use LRCLib for more reliable lyrics
-          const res = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(current.title)}&artist_name=${encodeURIComponent(current.artist)}`);
-          const data = await res.json();
-
-          if (data && data.length > 0) {
-            // First result is usually the best match
-            setLyrics(data[0].plainLyrics || data[0].syncedLyrics || "No se encontraron letras claras para este tema... 🎵");
-          } else {
-            // Fallback to searching with just the title
-            const fallbackRes = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(current.title)}`);
-            const fallbackData = await fallbackRes.json();
-            if (fallbackData && fallbackData.length > 0) {
-              setLyrics(fallbackData[0].plainLyrics || fallbackData[0].syncedLyrics || "No se encontraron letras...");
-            } else {
-              setLyrics("No se encontraron letras para este tema 🎵");
-            }
-          }
-        } catch (e) {
-          setLyrics("No se pudieron cargar las letras...");
-        } finally {
-          setIsLoadingLyrics(false);
+        const result = await fetchLyrics(playlist[0].title, playlist[0].artist);
+        if (result && result.lyrics) {
+          setLyrics(result.lyrics);
+        } else {
+          setLyrics("No se encontraron letras para este tema 🎵");
         }
+        setIsLoadingLyrics(false);
       }
     };
-    fetchLyrics();
+    getLyrics();
   }, [playlist[0]?.id, showLyrics]);
 
   const searchSong = async (query: string) => {
