@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Music, Search, Send, CheckCircle2, AlertCircle, Loader2, ListMusic, Mic2, X } from 'lucide-react';
+import { Music, Search, Send, CheckCircle2, AlertCircle, Loader2, ListMusic, Mic2, X, Plus } from 'lucide-react';
 import debounce from 'lodash/debounce';
 import { fetchLyrics } from '@/lib/lyrics';
 
@@ -28,6 +28,7 @@ export default function GuestPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [preview, setPreview] = useState<SongPreview | null>(null);
+  const [searchResults, setSearchResults] = useState<SongPreview[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistSong[]>([]);
   const [showQueue, setShowQueue] = useState(false);
@@ -78,10 +79,12 @@ export default function GuestPage() {
       const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data && data.length > 0) {
+        setSearchResults(data);
         setPreview(data[0]);
         // Update artist field if it's empty
         if (!artist) setArtist(data[0].artist);
       } else {
+        setSearchResults([]);
         setPreview(null);
       }
     } catch (e) {
@@ -179,7 +182,7 @@ export default function GuestPage() {
 
         <div className="glass p-8 rounded-[2.5rem] shadow-[0_32px_64px_rgba(0,0,0,0.5)] border-white/5 relative bg-white/[0.02]">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
+            <div className="relative group">
               <div className="relative group">
                 <Music className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
                 <input
@@ -188,52 +191,68 @@ export default function GuestPage() {
                   value={title}
                   onChange={handleTitleChange}
                   required
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-medium"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-bold"
                 />
               </div>
 
-              <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Artista (Opcional)"
-                  value={artist}
-                  onChange={(e) => setArtist(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-medium"
-                />
-              </div>
-
-              <input
-                type="text"
-                placeholder="Tu nombre (Anónimo)"
-                value={requestedBy}
-                onChange={(e) => setRequestedBy(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-medium text-sm"
-              />
+              {/* Pretty Glass Dropdown */}
+              <AnimatePresence>
+                {(isSearching || searchResults.length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute top-full left-0 w-full mt-2 glass rounded-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+                  >
+                    {isSearching ? (
+                      <div className="p-8 flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <p className="text-xs font-black text-white/20 uppercase tracking-widest">Buscando ritmo...</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
+                        {searchResults.map((song, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              setTitle(song.title);
+                              setArtist(song.artist);
+                              setPreview(song);
+                              setSearchResults([]);
+                            }}
+                            className="w-full p-4 flex items-center gap-4 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-none group/item"
+                          >
+                            <div className="relative shrink-0">
+                               <img src={song.thumbnail} alt="thumb" className="w-12 h-12 rounded-xl object-cover shadow-lg border border-white/5" />
+                               <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover/item:opacity-100 transition-opacity rounded-xl" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-sm truncate group-hover/item:text-primary transition-colors">{song.title}</h4>
+                              <p className="text-white/40 text-[11px] truncate uppercase font-bold tracking-tight">{song.artist}</p>
+                            </div>
+                            <div className="p-2 opacity-0 group-hover/item:opacity-100 transition-opacity bg-primary/20 rounded-xl">
+                               <Plus className="w-4 h-4 text-primary" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <AnimatePresence>
-              {isSearching ? (
-                <div className="flex items-center justify-center gap-2 text-white/30 text-xs py-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Buscando en YouTube...
-                </div>
-              ) : preview && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="bg-primary/5 p-4 rounded-3xl border border-primary/20 flex items-center gap-4"
-                >
-                  <img src={preview.thumbnail} alt="thumb" className="w-16 h-16 rounded-2xl object-cover shadow-2xl" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[9px] font-black text-primary uppercase tracking-widest mb-1 leading-none">Mejor coincidencia</p>
-                    <h4 className="font-bold text-xs truncate leading-tight">{preview.title}</h4>
-                    <p className="text-white/40 text-[10px] truncate leading-tight mt-1">{preview.artist}</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
+              <input
+                type="text"
+                placeholder="Artista (Opcional)"
+                value={artist}
+                onChange={(e) => setArtist(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-medium"
+              />
+            </div>
 
             <button
               type="submit"
