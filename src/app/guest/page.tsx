@@ -243,17 +243,6 @@ export default function GuestPage() {
               </AnimatePresence>
             </div>
 
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-primary transition-colors" />
-              <input
-                type="text"
-                placeholder="Artista (Opcional)"
-                value={artist}
-                onChange={(e) => setArtist(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all placeholder:text-white/20 font-medium"
-              />
-            </div>
-
             <button
               type="submit"
               disabled={status === 'loading' || !title}

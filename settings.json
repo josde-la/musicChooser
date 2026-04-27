@@ -1,0 +1,8 @@
+{
+  "onlyMusic": false,
+  "forbiddenKeywords": [],
+  "allowedGenres": [],
+  "disallowedGenres": [],
+  "blockExplicit": false,
+  "maxSongDuration": 600
+}

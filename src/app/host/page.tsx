@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, Reorder, AnimatePresence } from 'framer-motion';
-import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2, Library } from 'lucide-react';
+import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2, Library, Shield, Settings, Check, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import YouTube from 'react-youtube';
 import debounce from 'lodash/debounce';
+import { PartySettings, AVAILABLE_GENRES } from '@/lib/types';
 
 const MusicVisualizer = ({ isPlaying }: { isPlaying: boolean }) => (
   <div className="flex items-end gap-1 h-8">
@@ -38,6 +39,8 @@ interface SongRequest {
 export default function HostDashboard() {
   const [playlist, setPlaylist] = useState<SongRequest[]>([]);
   const [showQR, setShowQR] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<PartySettings | null>(null);
   const [joinUrl, setJoinUrl] = useState("");
   const [hasMounted, setHasMounted] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
@@ -77,10 +80,36 @@ export default function HostDashboard() {
     }
   }, [isPlaying]);
 
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      setSettings(data);
+    } catch (e) {
+      console.error("Error fetching settings:", e);
+    }
+  };
+
+  const updateSettings = async (newSettings: Partial<PartySettings>) => {
+    if (!settings) return;
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch (e) {
+      console.error("Error updating settings:", e);
+    }
+  };
+
   useEffect(() => {
     setHasMounted(true);
     setJoinUrl(`${window.location.host}/guest`);
     fetchPlaylist();
+    fetchSettings();
     const interval = setInterval(fetchPlaylist, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -329,6 +358,16 @@ export default function HostDashboard() {
             >
               <QrCode className="w-5 h-5" />
               Invitación
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 glass px-6 py-3 rounded-2xl border-white/10 text-white/60 font-bold shrink-0 hover:text-white"
+              title="Filtros y Seguridad"
+            >
+              <Shield className="w-5 h-5" />
             </motion.button>
           </div>
         </header>
@@ -607,6 +646,154 @@ export default function HostDashboard() {
               <p className="text-white/60 mb-4 font-medium px-4 text-sm">Escanea para pedir tu tema favorito</p>
               <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
                  <p className="text-primary font-mono text-xs break-all">{joinUrl}</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showSettings && settings && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="glass p-8 rounded-[3rem] max-w-2xl w-full relative border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar shadow-[0_0_100px_rgba(139,92,246,0.15)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowSettings(false)}
+                className="absolute top-6 right-6 text-white/40 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center gap-4 mb-8">
+                <div className="p-3 bg-primary/20 rounded-2xl">
+                  <Shield className="w-8 h-8 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black">Filtros de Seguridad</h2>
+                  <p className="text-sm text-white/40">Controla lo que suena en tu negocio</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Toggles */}
+                <div className="space-y-6">
+                  <div className="glass p-5 rounded-3xl border-white/5 space-y-4">
+                    <h3 className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-2">
+                       <Check className="w-4 h-4" /> Configuración Básica
+                    </h3>
+                    <div className="flex items-center justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="font-bold">Solo Música</span>
+                        <span className="text-[10px] text-white/30">Filtra contenido de YouTube</span>
+                      </div>
+                      <button
+                        onClick={() => updateSettings({ onlyMusic: !settings.onlyMusic })}
+                      >
+                        <div className={`w-12 h-6 rounded-full transition-colors relative ${settings.onlyMusic ? 'bg-primary' : 'bg-white/10'}`}>
+                          <motion.div
+                            animate={{ x: settings.onlyMusic ? 24 : 4 }}
+                            className="absolute w-4 h-4 bg-white rounded-full shadow-lg top-1"
+                          />
+                        </div>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="font-bold">Bloqueo Explícito</span>
+                        <span className="text-[10px] text-white/30">Evita temas con letra explícita</span>
+                      </div>
+                      <button
+                        onClick={() => updateSettings({ blockExplicit: !settings.blockExplicit })}
+                      >
+                        <div className={`w-12 h-6 rounded-full transition-colors relative ${settings.blockExplicit ? 'bg-primary' : 'bg-white/10'}`}>
+                          <motion.div
+                            animate={{ x: settings.blockExplicit ? 24 : 4 }}
+                            className="absolute w-4 h-4 bg-white rounded-full shadow-lg top-1"
+                          />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="glass p-5 rounded-3xl border-white/5 space-y-3">
+                    <h3 className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-2">
+                       <BarChart3 className="w-4 h-4" /> Duración Máxima
+                    </h3>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="number"
+                        value={settings.maxSongDuration}
+                        onChange={(e) => updateSettings({ maxSongDuration: parseInt(e.target.value) })}
+                        className="w-full bg-white/5 border border-white/10 py-3 px-4 rounded-xl focus:ring-1 focus:ring-primary outline-none"
+                      />
+                      <span className="text-xs text-white/40 font-bold">SEG</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Keywords & Genres */}
+                <div className="space-y-6">
+                  <div className="glass p-5 rounded-3xl border-white/5 space-y-3">
+                    <h3 className="text-xs font-black text-primary uppercase tracking-widest">Palabras Prohibidas</h3>
+                    <textarea
+                      placeholder="palabra1, palabra2, palabra3"
+                      value={settings.forbiddenKeywords.join(', ')}
+                      onChange={(e) => updateSettings({ forbiddenKeywords: e.target.value.split(',').map(s => s.trim()) })}
+                      onBlur={(e) => {
+                        const words = e.target.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                        updateSettings({ forbiddenKeywords: words });
+                      }}
+                      className="w-full bg-white/5 border border-white/10 py-3 px-4 rounded-xl h-24 focus:ring-1 focus:ring-primary outline-none text-sm resize-none"
+                    />
+                    <p className="text-[10px] text-white/40">Separadas por comas</p>
+                  </div>
+
+                  <div className="glass p-5 rounded-3xl border-white/5 space-y-3">
+                    <h3 className="text-xs font-black text-primary uppercase tracking-widest">Estilos Prohibidos</h3>
+                    <p className="text-[10px] text-white/40 mb-2">Click para bloquear</p>
+                    <div className="flex flex-wrap gap-2 justify-start">
+                      {AVAILABLE_GENRES.map((genre) => {
+                        const isSelected = settings.disallowedGenres.includes(genre.id);
+                        return (
+                          <button
+                            key={genre.id}
+                            onClick={() => {
+                              const newDisallowed = isSelected
+                                ? settings.disallowedGenres.filter(g => g !== genre.id)
+                                : [...settings.disallowedGenres, genre.id];
+                              updateSettings({ disallowedGenres: newDisallowed });
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                              isSelected
+                                ? 'bg-red-500 text-white'
+                                : 'bg-white/10 text-white/60 hover:bg-white/20'
+                            }`}
+                          >
+                            {genre.emoji} {genre.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="bg-primary text-white font-black px-8 py-3 rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all"
+                >
+                  LISTO
+                </button>
               </div>
             </motion.div>
           </motion.div>

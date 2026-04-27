@@ -1,49 +1,104 @@
 import yts from 'yt-search';
 
 /**
- * Searches for a song on YouTube.
- * If only a song title is provided, it returns the best match.
+ * Gets enriched metadata for a list of video IDs.
  */
-export async function searchSong(query: string) {
+export async function getVideosDetails(videoIds: string[]) {
   try {
-    // Check if we have an API key (optional but recommended for 100% reliability)
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey || videoIds.length === 0) return {};
+
+    const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,topicDetails,contentDetails,contentRating,status&id=${videoIds.join(',')}&key=${apiKey}`;
+    const response = await fetch(apiUrl);
+    const data = await response.json();
+
+    const details: Record<string, any> = {};
+    if (data.items) {
+      data.items.forEach((item: any) => {
+        const tags = item.snippet.tags || [];
+        const topics = (item.topicDetails?.topicCategories || []).map((url: string) =>
+          url.split('/').pop()?.toLowerCase()
+        );
+
+        // YouTube's content rating - could be "safe" or "restricted"
+        const ratings = item.contentRating || {};
+        const ytRating = ratings.ytRating || 'safe';
+        const isAgeRestricted = ratings.yt3dModule || ratings.ypcContentRating || null;
+
+        details[item.id] = {
+          tags,
+          topics,
+          description: item.snippet.description || '',
+          duration: item.contentDetails?.duration,
+          ytRating,
+          isAgeRestricted: !!isAgeRestricted || ytRating === 'restricted'
+        };
+      });
+    }
+    return details;
+  } catch (error) {
+    console.error('Error fetching video details:', error);
+    return {};
+  }
+}
+
+/**
+ * Searches for songs on YouTube.
+ */
+export async function searchSongs(query: string, maxResults: number = 5, regionCode: string = 'ES') {
+  try {
     const apiKey = process.env.YOUTUBE_API_KEY;
 
     if (apiKey) {
-      const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=1&q=${encodeURIComponent(query)}&type=video&key=${apiKey}`;
+      const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=${maxResults}&q=${encodeURIComponent(query)}&type=video&videoCategoryId=10&regionCode=${regionCode}&key=${apiKey}`;
       const response = await fetch(apiUrl);
       const data = await response.json();
 
       if (data.items && data.items.length > 0) {
-        const item = data.items[0];
-        return {
+        const results = data.items.map((item: any) => ({
+          id: item.id.videoId,
           title: item.snippet.title,
           artist: item.snippet.channelTitle,
           youtubeUrl: `https://youtube.com/watch?v=${item.id.videoId}`,
           thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
-          duration: '3:00', // API search doesn't give duration in the same call
-        };
+          duration: '3:00',
+        }));
+
+        // Fetch extra details for filtering
+        const details = await getVideosDetails(results.map((r: any) => r.id));
+        return results.map((r: any) => ({
+          ...r,
+          ...details[r.id]
+        }));
       }
     }
 
-    // Fallback to yt-search (scraping)
+    // Fallback to yt-search
     const searchFn = (yts as any).default || yts;
     const r = await searchFn(query);
 
-    if (!r || !r.videos || r.videos.length === 0) return null;
+    if (!r || !r.videos || r.videos.length === 0) return [];
 
-    const video = r.videos[0];
-    return {
+    return r.videos.slice(0, maxResults).map((video: any) => ({
+      id: video.videoId,
       title: video.title,
       artist: video.author.name,
       youtubeUrl: video.url,
       thumbnail: video.thumbnail,
       duration: video.timestamp,
-    };
+    }));
   } catch (error) {
     console.error('YouTube search error:', error);
-    return null;
+    return [];
   }
+}
+
+/**
+ * Searches for a single best match.
+ */
+export async function searchSong(query: string) {
+  const results = await searchSongs(query, 1);
+  return results.length > 0 ? results[0] : null;
 }
 
 /**
