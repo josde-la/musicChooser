@@ -7,11 +7,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
-    const settings = await request.json();
-    await saveSettings(settings);
-    return NextResponse.json({ success: true, settings });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 });
-  }
+  const newSettings = await request.json();
+  const current = await getSettings();
+  await saveSettings({ ...current, ...newSettings });
+  return NextResponse.json({ success: true });
 }

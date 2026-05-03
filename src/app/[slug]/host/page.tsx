@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, Reorder, AnimatePresence } from 'framer-motion';
 import { Music, SkipForward, Trash2, GripVertical, QrCode, X, BarChart3, Volume2, Play, Pause, FastForward, Search, Plus, Loader2, Library, Shield, Settings, Check, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -37,7 +38,10 @@ interface SongRequest {
 }
 
 export default function HostDashboard() {
+  const params = useParams();
+  const slug = params.slug as string;
   const [playlist, setPlaylist] = useState<SongRequest[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<SongRequest[]>([]);
   const [showQR, setShowQR] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<PartySettings | null>(null);
@@ -55,7 +59,13 @@ export default function HostDashboard() {
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const wakeLockRef = useRef<any>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Wake Lock Logic
   const requestWakeLock = async () => {
@@ -82,7 +92,7 @@ export default function HostDashboard() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/settings');
+      const res = await fetch("/api/" + slug + "/settings");
       const data = await res.json();
       setSettings(data);
     } catch (e) {
@@ -95,7 +105,7 @@ export default function HostDashboard() {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     try {
-      await fetch('/api/settings', {
+      await fetch("/api/" + slug + "/settings", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -107,10 +117,11 @@ export default function HostDashboard() {
 
   useEffect(() => {
     setHasMounted(true);
-    setJoinUrl(`${window.location.host}/guest`);
+    setJoinUrl("${window.location.host}/guest");
     fetchPlaylist();
     fetchSettings();
-    const interval = setInterval(fetchPlaylist, 3000);
+    fetchPendingRequests();
+    const interval = setInterval(() => { fetchPlaylist(); fetchPendingRequests(); }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -118,7 +129,7 @@ export default function HostDashboard() {
     if (!playlistUrl) return;
     setIsImporting(true);
     try {
-      const res = await fetch('/api/requests/import', {
+      const res = await fetch("/api/" + slug + "/requests/import", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: playlistUrl }),
@@ -142,7 +153,7 @@ export default function HostDashboard() {
     }
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch("/api/" + slug + "/search?q=" + encodeURIComponent(query));
       const data = await res.json();
       setSearchResults(data || []);
     } catch (e) {
@@ -164,7 +175,7 @@ export default function HostDashboard() {
 
   const handleAddSong = async (song: any) => {
     try {
-      await fetch('/api/requests', {
+      await fetch("/api/" + slug + "/requests", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,24 +225,127 @@ export default function HostDashboard() {
   }, [isPlaying, isFading]);
 
   const fetchPlaylist = async () => {
-    const res = await fetch('/api/requests');
-    const data = await res.json();
-    setPlaylist(data);
+    try {
+      const res = await fetch("/api/" + slug + "/requests");
+      const data = await res.json();
+      setPlaylist(data);
+    } catch (e) {
+      console.error("fetchPlaylist error:", e);
+    }
+  };
+
+  const fetchPendingRequests = async () => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests?estado=pendiente");
+      const data = await res.json();
+      setPendingRequests(data);
+    } catch (e) {
+      console.error("fetchPendingRequests error:", e);
+    }
   };
 
   const handleSkip = async () => {
-    await fetch('/api/requests/skip', { method: 'POST' });
+    try {
+      const res = await fetch("/api/" + slug + "/requests/skip", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Skip failed');
+      showToast('Canción saltada');
+    } catch (e: any) {
+      showToast(e.message || 'Error al saltar', 'error');
+    }
     fetchPlaylist();
+    fetchPendingRequests();
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/requests/${id}`, { method: 'DELETE' });
+    try {
+      const res = await fetch("/api/" + slug + "/requests/" + id, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+      showToast('Canción eliminada');
+    } catch (e: any) {
+      showToast(e.message || 'Error al eliminar', 'error');
+    }
+    fetchPlaylist();
+  };
+
+  const handleAccept = async (id: string) => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests/" + id + "/approve", {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Accept failed');
+      showToast('Canción aceptada');
+    } catch (e: any) {
+      showToast(e.message || 'Error al aceptar', 'error');
+    }
+    fetchPendingRequests();
+    fetchPlaylist();
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests/" + id, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Reject failed');
+      showToast('Canción rechazada');
+    } catch (e: any) {
+      showToast(e.message || 'Error al rechazar', 'error');
+    }
+    fetchPendingRequests();
+  };
+
+  const handleRejectAll = async () => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests/pending", {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      showToast('Solicitudes rechazadas');
+    } catch (e: any) {
+      showToast(e.message || 'Error', 'error');
+    }
+    fetchPendingRequests();
+  };
+
+  const handleAcceptAll = async () => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests/pending/accept-all", {
+        method: 'PUT',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      showToast('Todas aceptadas');
+    } catch (e: any) {
+      showToast(e.message || 'Error', 'error');
+    }
+    fetchPendingRequests();
+    fetchPlaylist();
+  };
+
+  const handleDeleteAllQueue = async () => {
+    try {
+      const res = await fetch("/api/" + slug + "/requests/queue", {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      showToast('Cola eliminada');
+    } catch (e: any) {
+      showToast(e.message || 'Error', 'error');
+    }
     fetchPlaylist();
   };
 
   const onReorder = async (newOrder: SongRequest[]) => {
     setPlaylist(newOrder);
-    await fetch('/api/requests/reorder', {
+    await fetch("/api/" + slug + "/requests/reorder", {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newOrder: newOrder.map(s => s.id) }),
@@ -277,7 +391,7 @@ export default function HostDashboard() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return "${mins}:${secs.toString().padStart(2, '0')}";
   };
 
   if (!hasMounted) return null;
@@ -286,6 +400,24 @@ export default function HostDashboard() {
     <div className="min-h-screen bg-[#050505] text-white p-6 md:p-12 relative overflow-hidden">
       {/* Dynamic Background */}
       <div className={`absolute top-0 left-0 w-full h-full bg-primary/5 transition-opacity duration-1000 ${isPlaying ? 'opacity-100' : 'opacity-0'}`} />
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl font-bold text-sm shadow-2xl ${
+              toast.type === 'error'
+                ? 'bg-red-500 text-white'
+                : 'bg-primary text-white'
+            }`}
+          >
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="max-w-4xl mx-auto relative z-10">
         <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
@@ -435,6 +567,77 @@ export default function HostDashboard() {
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {pendingRequests.length > 0 && (
+            <section className="mb-12">
+              <div className="flex items-center justify-between mb-6 px-2">
+                <h2 className="text-2xl font-black text-amber-400 flex items-center gap-2">
+                  <AlertCircle className="w-6 h-6" />
+                  Solicitudes pendientes
+                </h2>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleAcceptAll}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-bold border border-primary/20 hover:bg-primary/20 transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Aceptar todas
+                  </button>
+                  <button
+                    onClick={handleRejectAll}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-red-500/10 text-red-400 rounded-full text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Eliminar todas
+                  </button>
+                  <span className="bg-amber-400/20 text-amber-400 px-3 py-1 rounded-full text-xs font-black border border-amber-400/20">
+                    {pendingRequests.length} EN ESPERA
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {pendingRequests.map((song) => (
+                    <motion.div
+                      key={song.id}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: 20, height: 0 }}
+                      className="glass p-5 rounded-[2rem] border-amber-400/20 flex items-center gap-4"
+                    >
+                      {song.thumbnail ? (
+                        <img src={song.thumbnail} alt="thumb" className="w-14 h-14 rounded-2xl object-cover shrink-0" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center shrink-0">
+                          <Music className="w-6 h-6 text-white/20" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold truncate">{song.title}</h4>
+                        <p className="text-white/40 text-sm truncate">{song.artist}</p>
+                        <p className="text-[10px] text-white/30 mt-0.5">Pedida por <span className="text-white/50 font-bold">{song.requestedBy}</span></p>
+                      </div>
+                      <button
+                        onClick={() => handleReject(song.id)}
+                        className="p-3 bg-red-500/10 text-red-400 rounded-2xl hover:bg-red-500/20 transition-colors shrink-0"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleAccept(song.id)}
+                        className="p-3 bg-primary/20 text-primary rounded-2xl hover:bg-primary/30 transition-colors shrink-0"
+                      >
+                        <Check className="w-5 h-5" />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </section>
+          )}
+        </AnimatePresence>
+
         <section className="mb-12">
           <div className="glass p-8 rounded-[2.5rem] border-primary/20 relative overflow-hidden shadow-2xl">
              {/* Player Thumbnail Background */}
@@ -447,8 +650,13 @@ export default function HostDashboard() {
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-8 text-white/40 uppercase tracking-widest text-xs font-black">
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full bg-primary ${isPlaying ? 'animate-ping' : ''}`} />
-                  <h2>Reproduciendo ahora</h2>
+                  <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-400 animate-ping' : 'bg-primary'}`} />
+                  <h2 className="flex items-center gap-2">
+                    Reproduciendo ahora
+                    <span className="bg-primary/30 text-primary px-2 py-0.5 rounded-full text-[10px] font-black">
+                      #1
+                    </span>
+                  </h2>
                 </div>
                 <div className="flex items-center gap-4">
                   <MusicVisualizer isPlaying={isPlaying} />
@@ -526,6 +734,7 @@ export default function HostDashboard() {
             <div className="fixed left-[-1000px] top-0 opacity-0 pointer-events-none">
               {isStarted && currentVideoId && (
                 <YouTube
+                  key={currentVideoId}
                   videoId={currentVideoId}
                   opts={youtubeOpts}
                   onReady={(e) => {
@@ -573,11 +782,20 @@ export default function HostDashboard() {
 
         <section>
           <div className="flex items-center justify-between mb-8 px-2">
-            <h2 className="text-2xl font-black">Próximas canciones</h2>
+            <h2 className="text-2xl font-black">Cola de canciones</h2>
             <div className="flex items-center gap-3">
-               <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-black border border-primary/20">
-                {Math.max(0, playlist.length - 1)} EN COLA
+              <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-xs font-black border border-primary/20">
+                {playlist.length} EN COLA
               </span>
+              {playlist.length > 1 && (
+                <button
+                  onClick={handleDeleteAllQueue}
+                  className="flex items-center gap-2 px-4 py-1.5 bg-red-500/10 text-red-400 rounded-full text-xs font-bold border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Eliminar todas
+                </button>
+              )}
             </div>
           </div>
 
@@ -776,7 +994,7 @@ export default function HostDashboard() {
                               isSelected
                                 ? 'bg-red-500 text-white'
                                 : 'bg-white/10 text-white/60 hover:bg-white/20'
-                            }`}
+                            }` }
                           >
                             {genre.emoji} {genre.label}
                           </button>

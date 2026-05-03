@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Music, Search, Send, CheckCircle2, AlertCircle, Loader2, ListMusic, Mic2, X, Plus } from 'lucide-react';
 import debounce from 'lodash/debounce';
@@ -22,6 +23,8 @@ interface PlaylistSong {
 }
 
 export default function GuestPage() {
+  const params = useParams();
+  const slug = params.slug as string;
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [requestedBy, setRequestedBy] = useState('');
@@ -39,8 +42,9 @@ export default function GuestPage() {
   // Fetch current playlist
   useEffect(() => {
     const fetchPlaylist = async () => {
+      if (!slug) return;
       try {
-        const res = await fetch('/api/requests');
+        const res = await fetch(`/api/${slug}/requests`);
         const data = await res.json();
         setPlaylist(data);
       } catch (e) {
@@ -76,7 +80,7 @@ export default function GuestPage() {
     }
     setIsSearching(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/${slug}/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data && data.length > 0) {
         setSearchResults(data);
@@ -113,7 +117,7 @@ export default function GuestPage() {
     setErrorMessage('');
 
     try {
-      const res = await fetch('/api/requests', {
+      const res = await fetch(`/api/${slug}/requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, artist, requestedBy }),

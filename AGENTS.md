@@ -2,47 +2,45 @@
 
 Welcome, fellow Agent! This document provides context on the architecture and key components of **PartyMixer** to help you understand and modify the codebase efficiently.
 
-## 🏗️ Project Architecture
+## 🏗️ Project Architecture (Multitenant Upgrade)
 
-PartyMixer is a Next.js application built with the App Router. It uses a custom file-based persistence layer to ensure it works on standard container-based hosts (like Railway/Render).
+PartyMixer is a Next.js application built with the App Router. We recently modernized the app to feature a robust **Postgres DBMS integration (via Supabase)**, enabling multitenancy so a single deployment handles multiple venues simultaneously.
 
 ### Key Directories
 
-- **/src/app**: Next.js App Router routes.
-  - `/api/requests`: Handles song queue (GET, POST, DELETE).
-  - `/api/requests/reorder`: Handles drag-and-drop persistence (PUT).
-  - `/api/requests/skip`: Handles song skipping and triggers the **Auto-Mix Discovery** logic.
-  - `/api/search`: Proxies YouTube searches for live previews.
-  - `/guest`: The mobile-first page where users request songs and view lyrics.
-  - `/host`: The DJ dashboard for controlling playback.
+- **/src/app/[slug]**: Multitenant Next.js App Router routes.
+  - `/api/[slug]/requests`: Tenant-isolated endpoints. Handles the song queue (GET, POST, DELETE, PUT).
+  - `/api/[slug]/search`: Localized proxy for searches applying venue-specific configuration.
+  - `/[slug]/guest`: The mobile-first page scoped to a specific venue.
+  - `/[slug]/host`: The DJ dashboard for controlling isolated playback.
 - **/src/lib**: Core logic.
-  - `playlist.ts`: The persistence engine. Manages `playlist.json`.
-  - `youtube.ts`: Search and discovery logic. Includes scrapers and support for the YouTube Data API.
+  - `db.ts`: The central Supabase Data Layer, wrapping fetches to `locales` and `peticiones` tables. Use these functions instead of raw queries whenever possible!
+  - `supabase.ts`: Supabase client initialization.
+  - `youtube.ts`: Search, metadata validation, and discovery logic.
 
 ## 🔑 Crucial Logic to Understand
 
-### 1. The Auto-Mix Discovery Engine
-Located in `src/lib/youtube.ts` (`getRecommendedVideos`) and triggered in `src/app/api/requests/skip/route.ts`.
-- It searches for `${currentSong} similar songs`.
-- It **must** filter results to avoid duplicates (same song, different uploader).
-- It adds a random choice from the filtered results to keep the playlist fresh.
+### 1. Dual Mode Operation (Inbox Control)
+The application handles queuing with the explicit state from the `peticiones` table (`estado`: 'pendiente', 'aceptada', 'reproducida').
+- Depending on the `locales.auto_aceptar` flag, new songs either go straight to `aceptada` or stay `pendiente`. The DJ must manually approve pending requests from the dashboard UI.
 
-### 2. Lyrics Logic
-Located in `src/app/guest/page.tsx` and `src/lib/lyrics.ts`.
-- Implements a **Redundant Multi-Provider** system.
-- Tries providers in order: **LRCLib** -> **Lyrics.ovh** -> **Lyrist**.
-- Includes a fuzzy search fallback (searching by title only) if specific Artist+Title matches fail.
+### 2. The Auto-Mix Discovery Engine
+Located in `src/lib/youtube.ts` (`getRecommendedVideos`) and triggered in `src/app/api/[slug]/requests/skip/route.ts`.
+- It searches for similar songs to keep the party fluid when the queue abruptly ends.
+
+### 3. Lyrics Logic
+Located in `src/app/[slug]/guest/page.tsx` and `src/lib/lyrics.ts`.
+- Tries providers in order: **LRCLib** -> **Lyrics.ovh** -> **Lyrist**. Includes fuzzy search fallback.
 
 ## 📦 Persistence
-The app stores the queue in `/playlist.json`.
-- **Production Warning**: When deploying to containerized environments, ensure this file is on a persistent volume, or the queue will reset on every deploy/restart.
+We fully migrated away from the stateless local `playlist.json` implementation to **Supabase**! The queue architecture is completely robust for containerized, ephemeral, or serverless deployments.
 
 ## 🛠️ Tech Stack
 - **Next.js** (App Router & Turbopack)
+- **Supabase** (Postgres Data Engine)
 - **Tailwind CSS** (Styling)
 - **Framer Motion** (Animations & Reordering)
 - **react-youtube** (YouTube Player API)
 - **Lucide React** (Icons)
-- **yt-search** (Scraping fallback)
 
 Happy coding, Agent! 🚀
